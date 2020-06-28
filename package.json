@@ -1,0 +1,13 @@
+{
+  "name": "filetunnel-server",
+  "version": "0.0.1",
+  "description": "Server for FileTunnel project.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "repository": "https://github.com/mukeran/filetunnel-server",
+  "author": "mukeran <mukeran@mukeran.com>",
+  "license": "MIT",
+  "private": true
+}
