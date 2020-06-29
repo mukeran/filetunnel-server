@@ -82,6 +82,7 @@ function startServer (host, port) {
     client.on('data', (data) => processData(data, client))
     client.on('close', () => {
       logger.info(`Connection from ${client.remoteAddress}:${client.remotePort} closed`)
+      clients.del(client.remoteAddress, client.remotePort)
     })
   })
   /* Start listening */
