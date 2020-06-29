@@ -4,10 +4,21 @@
   "description": "Server for FileTunnel project.",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node src/app.js"
   },
   "repository": "https://github.com/mukeran/filetunnel-server",
   "author": "mukeran <mukeran@mukeran.com>",
   "license": "MIT",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "log4js": "^6.3.0"
+  },
+  "devDependencies": {
+    "eslint": ">=6.2.2",
+    "eslint-config-standard": "^14.1.1",
+    "eslint-plugin-import": ">=2.18.0",
+    "eslint-plugin-node": ">=9.1.0",
+    "eslint-plugin-promise": ">=4.2.1",
+    "eslint-plugin-standard": ">=4.0.0"
+  }
 }
