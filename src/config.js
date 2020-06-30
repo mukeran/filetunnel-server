@@ -9,5 +9,6 @@ module.exports = {
   connection: {
     MAX_SEQUENCE_NUMBER: 65536,
     RESPONSE_TIMEOUT: 30000
-  }
+  },
+  database: 'mongodb://127.0.0.1:27017/FileTunnel'
 }

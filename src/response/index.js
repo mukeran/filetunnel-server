@@ -5,7 +5,8 @@ const { logger } = require('../logger')
 
 /* Registered actions */
 const actions = {
-  alive: require('./alive')
+  alive: require('./alive'),
+  ...require('./user')
 }
 
 /**
