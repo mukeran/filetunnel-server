@@ -1,6 +1,7 @@
 const { UserModel, SessionModel } = require('../model/user')
 const { sendResponse } = require('../connection/payload')
 const status = require('../status')
+const logger = require('../logger')
 
 function register (packet, client) {
   const { username, password } = packet.data
@@ -34,11 +35,10 @@ function register (packet, client) {
 }
 
 function login (packet, client) {
-  function login (packet, client) {
   const { username, password } = packet.data
   UserModel.findOne({ username: username }, function (err, user) {
     if (err) throw err
-    console.log(user)
+    console.log(user.online)
     console.log('%s %s %s', user.username, user.salt, user.password)
     console.log(UserModel.getPasswordHash(password, user.salt) + '\n' + user.password)
     // eslint-disable-next-line eqeqeq
@@ -47,21 +47,33 @@ function login (packet, client) {
         if (err) throw err
         console.log(user.online)
         console.log(user._id.toString())
-      }) // 设置一个online 字段表示已经登录    sessionID协商
-      SessionModel.create({
-        userID: user._id.toString(),
-        ip: client.ip,
-        controlPort: client.port,
-        transferPort: client.port
-      }, function (err, result) {
-        if (err) throw err
-        console.log(result)
       })
-      console.log(user.username + ' has logged in')
-      sendResponse(client, {
-        status: 200,
-        Logged_in: 'success'
-      }, packet)
+
+      SessionModel.create({
+        userID: user._id,
+        sessionID: '_id',
+        ip: client.remoteAddress,
+        controlPort: client.remotePort,
+        transferPort: client.remotePort
+      })
+        .then((data) => {
+          console.log(user.username + ' has logged in')
+          sendResponse(client, {
+            status: status.OK,
+            data: {
+              _id: user._id,
+              username: user.username,
+              sessionId: data._id
+            }
+          }, packet)
+        })
+        .catch((err) => {
+          console.log(err)
+          sendResponse(client, {
+            status: -1,
+            detail: 'session fail'
+          }, packet)
+        })
     } else {
       console.log(user.username + ' failed logged in, wrong password')
       sendResponse(client, {
@@ -71,32 +83,47 @@ function login (packet, client) {
     }
   })
 }
+
 function logout (packet, client) {
-  const { username, sessionID } = packet.data
-  SessionModel.findOne({ sessionID }, function (_err, session) {
-    if (_err) throw _err
-    console.log(session)
-    SessionModel.deleteOne({ session })
-    sendResponse(client, {
-      status: status.OK,
-      data: username + ' has logged out'
+  SessionModel.findOne({ ip: client.remoteAddress, controlPort: client.remotePort })
+    .then(session => {
+      SessionModel.deleteOne(session)
+        .then(() => {
+          sendResponse(client, {
+            status: status.OK
+          }, packet)
+        })
+        .catch(err => {
+          logger.error(err)
+          sendResponse(client, {
+            status: status.UNKNOWN_ERROR
+          }, packet)
+        })
     })
-  })
+    .catch(err => {
+      logger.error(err)
+      sendResponse(client, {
+        status: status.UNKNOWN_ERROR
+      }, packet)
+    })
 }
-function changePassword(packet, client) {
+
+function changePassword (packet, client) {
   const { username, password, newpwd } = packet.data
   UserModel.findOne({ username }, function (err, user) {
     if (err) throw err
-    console.log(user.username)
-    if (user.password == UserModel.getPasswordHash(password, salt) {
-      UserModel.updateOne({username}, { $set { password: newpwd }} )
+    if (user.password === UserModel.getPasswordHash(password, user.salt)) {
+      UserModel.updateOne({ username }, { $set: { password: newpwd } }, function (err, result) {
+        if (err) throw err
+        console.log(result)
+      })
     }
   })
-
 }
 
 module.exports = {
   register,
   login,
-  logout
+  logout,
+  changePassword
 }
