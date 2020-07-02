@@ -3,7 +3,7 @@
  */
 module.exports = {
   listen: {
-    HOST: '0.0.0.0',
+    HOST: '::',
     PORT: 10088
   },
   connection: {

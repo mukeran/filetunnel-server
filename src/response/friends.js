@@ -143,8 +143,16 @@ function answerFriendRequest (packet, client) {
       sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
       return
     }
-    FriendRequestsModel.findOne({ _id: _id })
+    if (session === null) {
+      sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+      return
+    }
+    FriendRequestsModel.findOne({ _id })
       .then(friendRequest => {
+        if (friendRequest === null) {
+          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          return
+        }
         if (friendRequest.toUserId !== session.userId) {
           sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
           return
