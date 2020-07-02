@@ -4,7 +4,16 @@ const db = require('../database')
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  salt: { type: String, required: true }
+  salt: { type: String, required: true },
+  publicKey: { type: String, required: true },
+  online: { type: Boolean }
+})
+const SessionSchema = new mongoose.Schema({
+  userID: { type: String, required: true, unique: true },
+  sessionID: { type: String, required: true },
+  ip: { type: String, required: true },
+  controlPort: { type: Number, required: true },
+  transferPort: { type: Number, required: true }
 })
 
 UserSchema.statics.getPasswordHash = function (password, salt) {
@@ -15,5 +24,5 @@ UserSchema.statics.getPasswordHash = function (password, salt) {
 }
 
 const UserModel = db.model('User', UserSchema)
-
-module.exports = UserModel
+const SessionModel = db.model('Session', SessionSchema)
+module.exports = { UserModel, SessionModel }
