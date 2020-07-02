@@ -71,21 +71,22 @@ function login (packet, client) {
             data: {
               _id: user._id,
               username: user.username,
-              sessionId: data._id
+              sessionId: data._id,
+              publicKey: user.publicKey
             }
           }, packet)
         })
         .catch((err) => {
           console.log(err)
           sendResponse(client, {
-            status: -1,
+            status: status.FAILED,
             detail: 'session fail'
           }, packet)
         })
     } else {
       console.log(user.username + ' failed logged in, wrong password')
       sendResponse(client, {
-        status: 300,
+        status: status.FAILED,
         Logged_in: 'failed'
       }, packet)
     }
