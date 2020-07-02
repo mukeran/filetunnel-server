@@ -46,7 +46,7 @@ function register (packet, client) {
  * @param {*} client
  */
 function login (packet, client) {
-  const { username, password } = packet.data
+  const { username, password, transferPort } = packet.data
   UserModel.findOne({ username: username })
     .then(async user => {
       if (UserModel.getPasswordHash(password, user.salt) === user.password) {
@@ -56,7 +56,7 @@ function login (packet, client) {
           sessionId: crypto.randomBytes(16).toString('hex'),
           ip: client.remoteAddress,
           controlPort: client.remotePort,
-          transferPort: client.remotePort
+          transferPort
         })
           .then((data) => {
             logger.debug(`${user.username} has logged in`)
@@ -149,7 +149,7 @@ function changePassword (packet, client) {
  */
 function requestPublicKey (packet, client) {
   const { userId } = packet.data
-  SessionModel.findOne({ _id: userId })
+  UserModel.findOne({ _id: userId })
     .then(user => {
       // send response with the publicKey of target user
       sendResponse(client, {
@@ -164,14 +164,14 @@ function requestPublicKey (packet, client) {
 }
 
 function resumeSession (packet, client) {
-  const { sessionId } = packet.data
+  const { sessionId, transferPort } = packet.data
   SessionModel.findOne({ sessionId })
     .then(session => {
       if (session === null) {
         sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
         return
       }
-      SessionModel.updateOne(session, { $set: { ip: client.remoteAddress, controlPort: client.remotePort } })
+      SessionModel.updateOne(session, { $set: { ip: client.remoteAddress, controlPort: client.remotePort, transferPort } })
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
         })
