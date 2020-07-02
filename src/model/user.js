@@ -2,10 +2,12 @@ const mongoose = require('mongoose')
 const db = require('../database')
 
 const UserSchema = new mongoose.Schema({
+  userID: { type: String, required: true },
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   salt: { type: String, required: true },
   publicKey: { type: String, required: true },
+  lastAliveTime: { type: Date, default: Date.now },
   online: { type: Boolean }
 })
 const SessionSchema = new mongoose.Schema({

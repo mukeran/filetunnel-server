@@ -84,6 +84,12 @@ function startServer (host, port) {
       logger.info(`Connection from ${client.remoteAddress}:${client.remotePort} closed`)
       clients.del(client.remoteAddress, client.remotePort)
     })
+    client.on('error', (err) => {
+      logger.error(`Socket error. ${err}`)
+    })
+  })
+  server.on('error', (err) => {
+    logger.error(`Socket error. ${err}`)
   })
   /* Start listening */
   server.listen(port, host)
