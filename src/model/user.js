@@ -7,7 +7,15 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   salt: { type: String, required: true },
   publicKey: { type: String, required: true },
-  lastAliveTime: { type: Date, default: Date.now }
+  lastAliveTime: { type: Date, default: Date.now },
+  online: { type: Boolean }
+})
+const SessionSchema = new mongoose.Schema({
+  userID: { type: String, required: true, unique: true },
+  sessionID: { type: String, required: true },
+  ip: { type: String, required: true },
+  controlPort: { type: Number, required: true },
+  transferPort: { type: Number, required: true }
 })
 
 UserSchema.statics.getPasswordHash = function (password, salt) {
@@ -17,6 +25,6 @@ UserSchema.statics.getPasswordHash = function (password, salt) {
   return sha1.update(salt + md5.update(password).digest('hex')).digest('hex')
 }
 
-const UserModel = db.model('user', UserSchema)
-
-module.exports = UserModel
+const UserModel = db.model('User', UserSchema)
+const SessionModel = db.model('Session', SessionSchema)
+module.exports = { UserModel, SessionModel }
