@@ -1,252 +1,243 @@
-const FriendsModel = require('../model/friends')
-const SessionModel = require('../model/session')
-const FriendRequestsModel = require('../model/friendRequests')
-const UserModel = require('../model/user')
+const { SessionModel } = require('../model/session')
+const { FriendRequestsModel } = require('../model/friendRequests')
+const { UserModel } = require('../model/user')
 const { sendResponse } = require('../connection/payload')
 const status = require('../status')
 const mongoose = require('mongoose')
+const { logger } = require('../logger')
+const clients = require('../connection/clients')
+const request = require('../request')
 
+/**
+ * Process the friend list request from client
+ * @param {Object} packet Received packet
+ * @param {Socket} client Client socket instance
+ */
 function requestFriendList (packet, client) {
-  var uID
-  // var usernames = []
-  // var lastAliveTime = []
-  // var ip = []
-  // var transferPort = []
-  var friendsData = []
-  SessionModel.getUserID('1', '1', function (_err, user) {
-    console.log(user)
-    if (user != null) uID = user.userID
-    console.log('uID:' + uID)
-    FriendsModel.findOne({ userID: uID })
+  SessionModel.getUserID(client.remoteAddress, client.remotePort, function (err, session) { // Get UserId by client ip and control port
+    if (err) {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+      return
+    }
+    if (session === null) { // In case user is not online
+      sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+      return
+    }
+    UserModel.findOne({ _id: session.userId })
       .then(async (data) => {
-        console.log('requestFriendList-done')
-        console.log('friends: ' + data.friends)
+        if (data === null) { // If user has no friends
+          sendResponse(client, { status: status.OK, data: { friends: [] } }, packet)
+          return
+        }
+        const friends = []
         for (const index in data.friends) {
-          const item = data.friends[index]
-          const obj = {}
-          await UserModel.findOne({ userID: item })
-            .then((friendData) => {
-              // console.log(friendData)
-              if (friendData.username != null) {
-                console.log(friendData.username)
-                obj._id = mongoose.Types.ObjectId(friendData._id).toString()
-              }
-              if (friendData._id != null) {
-                console.log(friendData._id)
-                obj.username = friendData.username
-              }
-              if (friendData.lastAliveTime != null) {
-                console.log(friendData.lastAliveTime)
-                obj.lastSeen = friendData.lastAliveTime.toISOString()
-              }
-              // friendsData.push(obj)
+          const friendId = data.friends[index]
+          const friend = {}
+          let isNotFound = false
+          await UserModel.findOne({ _id: friendId }) // Get user info
+            .then(user => {
+              friend._id = mongoose.Types.ObjectId(user._id).toString()
+              friend.username = user.username
+              friend.lastSeen = user.lastAliveTime.toISOString()
             })
-          obj.isNAT = false
-          obj.isOnline = false
-          await SessionModel.findOne({ userID: item })
-            .then((friendData) => {
-              // console.log(friendData)
-              if (friendData.ip != null) {
-                console.log(friendData.ip)
-                obj.ip = friendData.ip
+            .catch(err => {
+              logger.error(err)
+              isNotFound = true
+            })
+          if (isNotFound) continue // If no such a user or account has been canceled
+          friend.isNAT = false
+          friend.isOnline = false
+          /* Get user ip and port If user is online */
+          await SessionModel.findOne({ userId: friendId })
+            .then(session => {
+              if (session !== null) {
+                friend.ip = session.ip
+                friend.port = session.transferPort
+                friend.isOnline = true
               }
-              if (friendData.transferPort != null) {
-                console.log(friendData.transferPort)
-                obj.port = friendData.transferPort
-              }
-              obj.isOnline = true
             })
             .catch((err) => {
-              console.log('err in session:' + err)
+              logger.error(err)
             })
-          friendsData.push(obj)
-          console.log('After: ' + index + ' ' + JSON.stringify(friendsData[index]))
+          friends.push(friend)
         }
         sendResponse(client, {
           status: status.OK,
-          data: {
-            friends: friendsData
-          }
+          data: { friends }
         }, packet)
       })
       .catch((err) => {
-        console.log('requestFriendList-err')
-        sendResponse(client, {
-          status: status.UNKNOWN_ERROR,
-          errcode: err.code
-        }, packet)
+        logger.error(err)
+        sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
       })
   })
 }
 
-async function sendFriendRequest (packet, client) {
+/**
+ * Process friend request from client
+ * @param {Object} packet Received packet
+ * @param {Socket} client Client socket instance
+ */
+function sendFriendRequest (packet, client) {
   const { username } = packet.data
-  var userID
-  await UserModel.findOne({ username: username })
-    .then((data) => {
-      userID = data._id
-      console.log('userID: ' + userID)
-      // eslint-disable-next-line eqeqeq
-    })
-    .catch((err) => {
-      console.log('in first err:' + err.errcode)
-    })
-  var uID
-  // eslint-disable-next-line eqeqeq
-  if (userID != undefined) {
-    SessionModel.getUserID('1', '1', async function (_err, user) {
-      uID = user.userID
-      console.log('myID: ' + uID)
-      // eslint-disable-next-line eqeqeq
-      console.log('in create')
-      await FriendRequestsModel.create({
-        fromUserId: uID,
-        toUserId: userID
+  UserModel.findOne({ username: username }) // Get userId from username
+    .then(toUser => {
+      if (toUser === null) { // if no such a user
+        sendResponse(client, { status: status.user.NO_SUCH_USER }, packet)
+        return
+      }
+      /* Get UserId by client ip and control port */
+      SessionModel.getUserID(client.remoteAddress, client.remotePort, function (err, fromUserSession) {
+        if (err) {
+          logger.error(err)
+          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          return
+        }
+        FriendRequestsModel.create({ // Create a nuw friend request
+          fromUserId: fromUserSession.userId,
+          toUserId: toUser._id
+        })
+          .then(() => {
+            sendResponse(client, { status: status.OK }, packet)
+            /* Send a friend request message to targer user if the user is online */
+            SessionModel.findOne({ userId: toUser._id })
+              .then(session => {
+                if (session !== null) {
+                  const toClient = clients.get(session.ip, session.controlPort)
+                  request.sendFriendRequests(toClient)
+                }
+              })
+          })
+          .catch(err => {
+            logger.error(err)
+            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          })
       })
-        .then((data) => {
-          sendResponse(client, {
-            status: status.OK
-          }, packet)
-        })
-        .catch((err) => {
-          console.log('request-err')
-          sendResponse(client, {
-            status: status.UNKNOWN_ERROR,
-            errcode: err.code
-          }, packet)
-        })
     })
-  } else {
-    sendResponse(client, {
-      status: status.UNKNOWN_ERROR,
-      info: 'no such a user'
-    }, packet)
-  }
+    .catch(err => {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+    })
 }
 
+/**
+ * Process a delete friend request from client
+ * @param {Object} packet Received packet
+ * @param {Socket} client Client socket instance
+ */
 function deleteFriend (packet, client) {
-  const { userID } = packet.data
-  var newFriends = []
-  var uID
-  SessionModel.getUserID('1', '1', function (_err, user) {
-    uID = user.userID
-    FriendsModel.findOne({ userID: uID })
-      .then(async (data) => {
-        console.log('friends: ' + data.friends)
-        console.log('deleteFriend: ' + userID)
-        newFriends = data.friends
-        console.log('now Friends: ' + newFriends)
-        for (const index in data.friends) {
-          const item = data.friends[index]
-          console.log('friend[' + index + ']=' + item)
-          // eslint-disable-next-line eqeqeq
-          if (item == userID) {
-            await newFriends.splice(index, 1)
-            console.log('got it')
-          }
-        }
-        newFriends = newFriends.filter(function (s) {
-          return s && s.trim()
-        })
-        await FriendsModel.updateOne({ userID: uID }, { $set: { friends: newFriends } }, function (_err) {})
-        console.log('new Friends: ' + newFriends)
-        sendResponse(client, { status: status.OK }, packet)
+  const { userId } = packet.data
+  /* Get UserId by client ip and control port */
+  SessionModel.getUserID(client.remoteAddress, client.remotePort, function (err, session) {
+    if (err) {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+      return
+    }
+    UserModel.findOne({ _id: session.userId }) // Get user's friends
+      .then(data => {
+        const newFriends = data.friends.filter(friend => friend !== userId) // Delete user-specified friend
+        UserModel.updateOne({ _id: session.userId }, { $set: { friends: newFriends } }) // Update user's friends
+          .then(() => {
+            sendResponse(client, { status: status.OK }, packet)
+          })
+          .catch(err => {
+            logger.error(err)
+            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          })
       })
-      .catch((err) => {
-        console.log('deleteFriend-err')
-        sendResponse(client, {
-          status: status.UNKNOWN_ERROR,
-          errcode: err.code
-        }, packet)
+      .catch(err => {
+        logger.error(err)
+        sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
       })
   })
 }
 
+/**
+ * Process an operation of friend request from client
+ * @param {Object} packet Received packet
+ * @param {Socket} client Client socket instance
+ */
 function answerFriendRequest (packet, client) {
   const { _id, operation } = packet.data
-  console.log('_id: ' + _id)
-  console.log('opration:' + operation)
-  var userID
-  var uID
-  SessionModel.getUserID('1', '1', function (_err, user) {
-    uID = user.userID
-    console.log('myID: ' + uID)
-    FriendRequestsModel.findOne({ _id: _id })
-      .then(async (data) => {
-        console.log('answerFriendRequest: ' + _id)
-        userID = data.fromUserId
-        // eslint-disable-next-line eqeqeq
-        if (data.operation == 'accept') addFriend(userID, client) // 加好友
-        // if (data.action == 1) 传文件，暂未处理
-        FriendRequestsModel.deleteOne({ _id: _id })
-          .then((info) => {
-            console.log('success')
-          })
-          .catch((err) => {
-            console.log('delete unsuccess:' + err)
-          })
-      })
-      .catch((_err) => {
-        console.log('request-err')
-      })
-  })
-}
-
-function friendTransferRequest (packet, client) {
-  const { userID } = packet.data
-  console.log('userID: ' + userID)
-  var uID
-  SessionModel.getUserID('1', '1', async function (_err, user) {
-    uID = user.userID
-    console.log('myID: ' + uID)
-    await FriendRequestsModel.create({
-      requestID: uID,
-      responseID: userID,
-      operation: 0,
-      action: 1,
-      friendRequestsID: 'asdasdasd'
-    })
-    FriendRequestsModel.updateOne({ friendRequestsID: 'asdasdasd' }, { $set: { friendRequestsID: mongoose.Types.ObjectId(this._id).toString() } }, function (_err) {})
-  })
-}
-
-function addFriend (userID, client) {
-  var newFriends = []
-  var uID
-  SessionModel.getUserID('1', '1', function (_err, user) {
-    uID = user.userID
-    FriendsModel.findOne({ userID: uID })
-      .then(async (data) => {
-        console.log('friends: ' + data.friends)
-        console.log('friendRequest: ' + userID)
-        newFriends = data.friends
-        console.log('now Friends: ' + newFriends)
-        for (const index in data.friends) {
-          const item = data.friends[index]
-          console.log('friend[' + index + ']=' + item)
-          // eslint-disable-next-line eqeqeq
-          if (item == userID) {
-            await newFriends.splice(index, 1)
-            console.log('got it')
-          }
+  /* Get UserId by client ip and control port */
+  SessionModel.getUserID(client.remoteAddress, client.remotePort, function (err, session) {
+    if (err) {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+      return
+    }
+    if (session === null) { // In case user is not online
+      sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+      return
+    }
+    /* Find the friend request */
+    FriendRequestsModel.findOne({ _id })
+      .then(friendRequest => {
+        if (friendRequest === null) {
+          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          return
         }
-        await newFriends.push(userID)
-        newFriends = newFriends.filter(function (s) {
-          return s && s.trim()
-        })
-        await FriendsModel.updateOne({ userID: uID }, { $set: { friends: newFriends } }, function (_err) {})
-        console.log('new Friends: ' + newFriends)
+        if (friendRequest.toUserId !== session.userId) {
+          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+          return
+        }
+        if (operation === 'accept') {
+          /* Add friend */
+          UserModel.findOne({ _id: friendRequest.toUserId })
+            .then(data => {
+              /* Determine if target user is already user'sfriend */
+              if (!data.friends.some(friend => friend === friendRequest.fromUserId)) {
+                /* Add friends in both directions */
+                data.friends.push(friendRequest.fromUserId)
+                UserModel.updateOne({ _id: friendRequest.toUserId }, { $set: { friends: data.friends } })
+                  .then(() => {
+                    UserModel.findOne({ _id: friendRequest.fromUserId })
+                      .then(data => {
+                        if (!data.friends.some(friend => friend === friendRequest.toUserId)) {
+                          data.friends.push(friendRequest.toUserId)
+                          UserModel.updateOne({ _id: friendRequest.fromUserId }, { $set: { friends: data.friends } })
+                            .then(() => {
+                              sendResponse(client, { status: status.OK }, packet)
+                            })
+                            .catch(err => {
+                              logger.error(err)
+                              sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+                            })
+                        }
+                      })
+                  })
+                  .catch(err => {
+                    logger.error(err)
+                    sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+                  })
+              }
+            })
+            .catch(err => {
+              logger.error(err)
+              sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+            })
+        }
+        /* Delete the handled friend request */
+        FriendRequestsModel.deleteOne(friendRequest)
+          .then(() => {
+            logger.debug(`Successfully deleted friendRequest ${_id}`)
+          })
+          .catch(err => {
+            logger.debug(`Failed to delete friendRequest ${_id}. ${err}`)
+          })
       })
-      .catch((_err) => {
-        console.log('friendRequest-err')
+      .catch(err => {
+        logger.error(err)
+        sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
       })
   })
 }
+
 module.exports = {
   requestFriendList,
   sendFriendRequest,
   deleteFriend,
-  answerFriendRequest,
-  friendTransferRequest,
-  addFriend
+  answerFriendRequest
 }
