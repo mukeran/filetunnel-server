@@ -6,6 +6,6 @@ const FriendRequestsSchema = new mongoose.Schema({
   toUserId: { type: String }
 })
 
-const FriendRequestsModel = db.model('friendrequests', FriendRequestsSchema)
+const FriendRequestsModel = db.model('friendRequests', FriendRequestsSchema)
 
-module.exports = FriendRequestsModel
+module.exports = { FriendRequestsModel }

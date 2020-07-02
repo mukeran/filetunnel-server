@@ -22,10 +22,13 @@ function createPayload (packet) {
  * @param {Object} reqPacket Request packet
  */
 function sendResponse (client, packet, reqPacket) {
-  const payload = createPayload({ ...packet, sq: reqPacket.sq })
-  logger.debug(`Ready to send payload ${payload}`)
-  client.write(payload, () => {
-    logger.debug(`Sent payload ${payload}`)
+  return new Promise(resolve => {
+    const payload = createPayload({ ...packet, sq: reqPacket.sq })
+    logger.debug(`Ready to send payload ${payload}`)
+    client.write(payload, () => {
+      logger.debug(`Sent payload ${payload}`)
+      resolve()
+    })
   })
 }
 
