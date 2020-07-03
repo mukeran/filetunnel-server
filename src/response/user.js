@@ -49,6 +49,10 @@ function login (packet, client) {
   const { username, password, transferPort } = packet.data
   UserModel.findOne({ username: username })
     .then(async user => {
+      if (user === null) {
+        sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
+        return
+      }
       if (UserModel.getPasswordHash(password, user.salt) === user.password) {
         await SessionModel.deleteOne({ userId: user._id })
         SessionModel.create({ // create a session while login
@@ -72,10 +76,6 @@ function login (packet, client) {
                 request.sendFriendRequests(client)
               })
           })
-          .catch((err) => {
-            console.log(err)
-            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-          })
       } else {
         logger.debug(`${user.username} failed logged in, wrong password`)
         sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
@@ -95,16 +95,16 @@ function logout (packet, client) {
   // use session to specify a user
   SessionModel.findOne({ ip: client.remoteAddress, controlPort: client.remotePort })
     .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
+        return
+      }
       // delete session while logout
       SessionModel.deleteOne(session)
         .then(() => {
           logger.debug(`${client.remoteAddress}:${client.remotePort} logged out`)
           // send response to client and shut down
           sendResponse(client, { status: status.OK }, packet)
-        })
-        .catch(err => {
-          logger.error(err)
-          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
         })
     })
     .catch(err => {
@@ -118,29 +118,39 @@ function logout (packet, client) {
  * @param {*} client
  */
 function changePassword (packet, client) {
-  const { username, password, newPassword } = packet.data
+  const { password, newPassword } = packet.data
   const salt = crypto.randomBytes(16).toString('hex')
-  UserModel.findOne({ _id: username })
-    .then(user => {
-      // compare user.password with salted password that come from the request
-      if (user.password === UserModel.getPasswordHash(password, user.salt)) {
-        // replace password in database with new password
-        UserModel.updateOne(user, { $set: { password: UserModel.getPasswordHash(newPassword, salt), salt } })
-          .then(() => {
-            sendResponse(client, { status: status.OK }, packet) // send back response
-          })
-          .catch(err => {
-            logger.error(err)
-            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-          })
-      } else {
-        sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
-      }
-    })
-    .catch(err => {
-      logger.error(err)
+  SessionModel.getUserID(client.remoteAddress, client.remotePort, (err, session) => {
+    if (err) {
       sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-    })
+      return
+    }
+    if (session === null) {
+      sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
+      return
+    }
+    UserModel.findOne({ _id: session.userId })
+      .then(user => {
+        // compare user.password with salted password that come from the request
+        if (user.password === UserModel.getPasswordHash(password, user.salt)) {
+          // replace password in database with new password
+          UserModel.updateOne(user, { $set: { password: UserModel.getPasswordHash(newPassword, salt), salt } })
+            .then(() => {
+              sendResponse(client, { status: status.OK }, packet) // send back response
+            })
+            .catch(err => {
+              logger.error(err)
+              sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+            })
+        } else {
+          sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
+        }
+      })
+      .catch(err => {
+        logger.error(err)
+        sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+      })
+  })
 }
 /**
  * change user`s publicKey
