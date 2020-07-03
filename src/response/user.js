@@ -149,10 +149,10 @@ function changePassword (packet, client) {
 /**
  * User change publicKey
  * @param {*} packet Contains a new publicKey
- * @param {*} client 
+ * @param {*} client
  */
 function changePublicKey (packet, client) {
-  const {publicKey} = packet.data
+  const { publicKey } = packet.data
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
       if (session === null) {
@@ -162,9 +162,9 @@ function changePublicKey (packet, client) {
       UserModel.findOne({ _id: session.userId })
         .then(user => {
           UserModel.updateOne(user, { $set: { publicKey: publicKey } })
-              .then(() => {
-                sendResponse(client, { status: status.OK }, packet) // Send back response
-              })
+            .then(() => {
+              sendResponse(client, { status: status.OK }, packet) // Send back response
+            })
         })
     })
     .catch(err => {
