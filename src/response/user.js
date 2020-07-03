@@ -75,6 +75,7 @@ function login (packet, client) {
             }, packet)
               .then(() => { // Send all friend requests of current user to client
                 request.sendFriendRequests(client)
+                request.sendOfflineTransfers(client)
               })
           })
       } else {
@@ -225,6 +226,7 @@ function resumeSession (packet, client) {
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
           request.sendFriendRequests(client)
+          request.sendOfflineTransfers(client)
         })
     })
     .catch(err => {
