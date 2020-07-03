@@ -7,6 +7,7 @@ const mongoose = require('mongoose')
 const { logger } = require('../logger')
 const clients = require('../connection/clients')
 const request = require('../request')
+const config = require('../config')
 
 function requestFriendList (packet, client) {
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
@@ -24,7 +25,10 @@ function requestFriendList (packet, client) {
           const friends = []
           for (const index in data.friends) {
             const friendId = data.friends[index]
-            const friend = {}
+            const friend = {
+              isNAT: false,
+              isOnline: false
+            }
             let isNotFound = false
             await UserModel.findOne({ _id: friendId })
               .then(user => {
@@ -37,14 +41,14 @@ function requestFriendList (packet, client) {
                 friend.lastSeen = user.lastAliveTime.toISOString()
               })
             if (isNotFound) continue
-            friend.isNAT = false
-            friend.isOnline = false
             await SessionModel.findOne({ userId: friendId })
               .then(session => {
                 if (session !== null) {
                   friend.ip = session.ip
                   friend.port = session.transferPort
-                  friend.isOnline = true
+                  if (new Date().getTime() <= new Date(friend.lastSeen).getTime() + 3 * config.connection.ALIVE_PERIOD) {
+                    friend.isOnline = true
+                  }
                 }
               })
             friends.push(friend)
