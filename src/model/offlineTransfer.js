@@ -11,7 +11,7 @@ const OfflineTransferSchema = new mongoose.Schema({
   sha1: { type: String },
   encryptedKey: { type: String },
   path: { type: String },
-  time: { type: Date },
+  time: { type: Date, default: Date.now },
   deadline: { type: Date }
 })
 

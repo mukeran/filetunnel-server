@@ -8,22 +8,26 @@ const logger = require('../logger')
 function requestOfflineTransfer (packet, client) {
   const { userId, filename, size, sha1, deadline, encryptedKey } = packet.data
   /* Verify the validity of the signature here? */
-  console.log('in func')
-  OfflineTransferModel.create({
-    toUserId: userId,
-    filename: filename,
-    size: size,
-    sha1: sha1,
-    deadline: deadline,
-    encryptedKey: encryptedKey
-  })
-    .then(data => {
-      const transferKey = crypto.randomBytes(16).toString('hex')
-      sendResponse(client, { status: status.OK, data: { _id: data._id, transferKey: transferKey } }, packet)
-    })
-    .catch(err => {
-      logger.debug(err)
-      sendResponse(client, { status: status.transfer.FAILED }, packet)
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
+    .then(session => {
+      OfflineTransferModel.create({
+        fromUserId: session.userId,
+        toUserId: userId,
+        filename: filename,
+        size: size,
+        sha1: sha1,
+        status: 0,
+        deadline: deadline,
+        encryptedKey: encryptedKey
+      })
+        .then(data => {
+          const transferKey = crypto.randomBytes(16).toString('hex')
+          sendResponse(client, { status: status.OK, data: { _id: data._id, transferKey: transferKey } }, packet)
+        })
+        .catch(err => {
+          logger.debug(err)
+          sendResponse(client, { status: status.transfer.FAILED }, packet)
+        })
     })
 }
 
@@ -45,8 +49,8 @@ function queryOfflineTransfers (packet, client) {
                   sha1: TransferRecord.sha1,
                   toUserId: TransferRecord.toUserId,
                   status: TransferRecord.status,
-                  time: TransferRecord.time,
-                  deadline: TransferRecord.deadline
+                  time: TransferRecord.time.toISOString(),
+                  deadline: TransferRecord.deadline.toISOString()
                 })
               })
           }
@@ -73,6 +77,10 @@ function answerOfflineTransfer (packet, client) {
       OfflineTransferModel.findOne({ _id })
         .then(transferRequest => {
           if (transferRequest === null) {
+            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+            return
+          }
+          if (transferRequest.toUserId !== session.userId) {
             sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
             return
           }
