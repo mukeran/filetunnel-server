@@ -224,6 +224,7 @@ function resumeSession (packet, client) {
       SessionModel.updateOne(session, { $set: { ip: client.remoteAddress, controlPort: client.remotePort, transferPort } })
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
+          request.sendFriendRequests(client)
         })
     })
     .catch(err => {
