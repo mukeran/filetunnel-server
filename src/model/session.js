@@ -14,10 +14,9 @@ const SessionSchema = new mongoose.Schema({
  *get UserId by session
  * @param {String} ip // 远程ip
  * @param {number} port //远程端口
- * @param {Function} cb
  */
-SessionSchema.statics.getUserID = function (ip, port, cb) {
-  this.findOne({ ip: ip, controlPort: port }, cb)
+SessionSchema.statics.getByIpPort = function (ip, port) {
+  return this.findOne({ ip: ip, controlPort: port })
 } // 通过session判断用户
 
 const SessionModel = db.model('session', SessionSchema)

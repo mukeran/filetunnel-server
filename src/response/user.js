@@ -5,16 +5,17 @@ const status = require('../status')
 const { logger } = require('../logger')
 const crypto = require('crypto')
 const request = require('../request')
+const { assert } = require('console')
 
 /**
- *register as a user
- * @param {*} packet contains username, password and a publicKey
- * @param {*} client user`s remote ip and port
+ * Register as a user
+ * @param {*} packet Contains username, password and a publicKey
+ * @param {*} client Cser`s remote ip and port
  */
 function register (packet, client) {
   const { username, password, publicKey } = packet.data
   const salt = crypto.randomBytes(16).toString('hex')
-  // create a user in database contains username, salted password, publicKey etc
+  // Create a user in database contains username, salted password, publicKey etc
   UserModel.create({
     username,
     password: UserModel.getPasswordHash(password, salt),
@@ -41,8 +42,8 @@ function register (packet, client) {
 }
 
 /**
- *login function
- * @param {*} packet contains username and password
+ * Login function
+ * @param {*} packet Contains username and password
  * @param {*} client
  */
 function login (packet, client) {
@@ -55,7 +56,7 @@ function login (packet, client) {
       }
       if (UserModel.getPasswordHash(password, user.salt) === user.password) {
         await SessionModel.deleteOne({ userId: user._id })
-        SessionModel.create({ // create a session while login
+        SessionModel.create({ // Create a session while login
           userId: user._id,
           sessionId: crypto.randomBytes(16).toString('hex'),
           ip: client.remoteAddress,
@@ -64,7 +65,7 @@ function login (packet, client) {
         })
           .then((data) => {
             logger.debug(`${user.username} has logged in`)
-            sendResponse(client, { // send response with sessionId back to client
+            sendResponse(client, { // Send response with sessionId back to client
               status: status.OK,
               data: {
                 _id: user._id,
@@ -72,7 +73,7 @@ function login (packet, client) {
                 sessionId: data.sessionId
               }
             }, packet)
-              .then(() => { // send all friend requests of current user to client
+              .then(() => { // Send all friend requests of current user to client
                 request.sendFriendRequests(client)
               })
           })
@@ -87,23 +88,23 @@ function login (packet, client) {
     })
 }
 /**
- * logout of system
- * @param {} packet at this circumstance it is empty
+ * User logout operaion
+ * @param {} packet At this circumstance it is empty
  * @param {} client
  */
 function logout (packet, client) {
-  // use session to specify a user
-  SessionModel.findOne({ ip: client.remoteAddress, controlPort: client.remotePort })
+  // Use session to specify a user
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
       if (session === null) {
         sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
         return
       }
-      // delete session while logout
+      // Delete session while logout
       SessionModel.deleteOne(session)
         .then(() => {
           logger.debug(`${client.remoteAddress}:${client.remotePort} logged out`)
-          // send response to client and shut down
+          // Send response to client and shut down
           sendResponse(client, { status: status.OK }, packet)
         })
     })
@@ -113,59 +114,71 @@ function logout (packet, client) {
     })
 }
 /**
- * user change password
- * @param {*} packet contains the username, oldpassword and new password
+ * User change password
+ * @param {*} packet Contains the username, oldpassword and new password
  * @param {*} client
  */
 function changePassword (packet, client) {
   const { password, newPassword } = packet.data
   const salt = crypto.randomBytes(16).toString('hex')
-  SessionModel.getUserID(client.remoteAddress, client.remotePort, (err, session) => {
-    if (err) {
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
+    .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
+        return
+      }
+      UserModel.findOne({ _id: session.userId })
+        .then(user => {
+          // Compare user.password with salted password that come from the request
+          if (user.password === UserModel.getPasswordHash(password, user.salt)) {
+            // Replace password in database with new password
+            UserModel.updateOne(user, { $set: { password: UserModel.getPasswordHash(newPassword, salt), salt } })
+              .then(() => {
+                sendResponse(client, { status: status.OK }, packet) // Send back response
+              })
+          } else {
+            sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
+          }
+        })
+    })
+    .catch(err => {
+      logger.error(err)
       sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-      return
-    }
-    if (session === null) {
-      sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
-      return
-    }
-    UserModel.findOne({ _id: session.userId })
-      .then(user => {
-        // compare user.password with salted password that come from the request
-        if (user.password === UserModel.getPasswordHash(password, user.salt)) {
-          // replace password in database with new password
-          UserModel.updateOne(user, { $set: { password: UserModel.getPasswordHash(newPassword, salt), salt } })
-            .then(() => {
-              sendResponse(client, { status: status.OK }, packet) // send back response
-            })
-            .catch(err => {
-              logger.error(err)
-              sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-            })
-        } else {
-          sendResponse(client, { status: status.user.WRONG_USERNAME_OR_PASSWORD }, packet)
-        }
-      })
-      .catch(err => {
-        logger.error(err)
-        sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-      })
-  })
+    })
 }
 /**
- * change user`s publicKey
- * @param {*} packet contains userId and a new publicKey
+ * Change user`s publicKey
+ * @param {*} packet Contains userId and a new publicKey
  * @param {*} client
  */
 function requestPublicKey (packet, client) {
   const { userId } = packet.data
-  UserModel.findOne({ _id: userId })
-    .then(user => {
-      // send response with the publicKey of target user
-      sendResponse(client, {
-        status: status.OK,
-        data: { publicKey: user.publicKey }
-      }, packet)
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
+    .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+        return
+      }
+      UserModel.findOne({ _id: session.userId })
+        .then(user => {
+          assert(user !== null)
+          if (!(userId in user.friends)) {
+            sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+            return
+          }
+          UserModel.findOne({ _id: userId })
+            .then(user => {
+              if (user === null) {
+                sendResponse(client, { status: status.user.NO_SUCH_USER }, packet)
+                return
+              }
+              // Send response with the publicKey of target user
+              sendResponse(client, {
+                status: status.OK,
+                data: { publicKey: user.publicKey }
+              }, packet)
+            })
+        })
     })
     .catch(err => {
       logger.error(err)
@@ -185,10 +198,10 @@ function resumeSession (packet, client) {
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
         })
-        .catch(err => {
-          logger.error(err)
-          sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-        })
+    })
+    .catch(err => {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
     })
 }
 

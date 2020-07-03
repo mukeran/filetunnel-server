@@ -4,6 +4,7 @@
 module.exports = {
   OK: 0,
   UNKNOWN_ERROR: -1,
+  ACCESS_DENIED: -2,
   session: {
     NO_SUCH_SESSION: 1
   },
