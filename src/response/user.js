@@ -147,6 +147,33 @@ function changePassword (packet, client) {
     })
 }
 /**
+ * User change publicKey
+ * @param {*} packet Contains a new publicKey
+ * @param {*} client 
+ */
+function changePublicKey (packet, client) {
+  const {publicKey} = packet.data
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
+    .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
+        return
+      }
+      UserModel.findOne({ _id: session.userId })
+        .then(user => {
+          UserModel.updateOne(user, { $set: { publicKey: publicKey } })
+              .then(() => {
+                sendResponse(client, { status: status.OK }, packet) // Send back response
+              })
+        })
+    })
+    .catch(err => {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+    })
+}
+
+/**
  * Change user`s publicKey
  * @param {*} packet Contains userId and a new publicKey
  * @param {*} client
@@ -210,6 +237,7 @@ module.exports = {
   login,
   logout,
   changePassword,
+  changePublicKey,
   requestPublicKey,
   resumeSession
 }
