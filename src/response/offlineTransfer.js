@@ -6,8 +6,7 @@ const status = require('../status')
 const logger = require('../logger')
 
 function requestOfflineTransfer (packet, client) {
-  const { userId, filename, size, sha1, deadline, encryptedKey } = packet.data
-  /* Verify the validity of the signature here? */
+  const { userId, filename, size, sha1, deadline, encryptedKey, signature } = packet.data
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
       OfflineTransferModel.create({
@@ -18,7 +17,8 @@ function requestOfflineTransfer (packet, client) {
         sha1: sha1,
         status: 0,
         deadline: deadline,
-        encryptedKey: encryptedKey
+        encryptedKey: encryptedKey,
+        signature: signature
       })
         .then(data => {
           const transferKey = crypto.randomBytes(16).toString('hex')
@@ -89,10 +89,11 @@ function answerOfflineTransfer (packet, client) {
             return
           }
           if (operation === 'accept') {
-            OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 2 } })
+            const transferKey = crypto.randomBytes(16).toString('hex')
+            OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 2, transferKey: transferKey } })
               .then(() => {
                 /* File operation */
-                sendResponse(client, { status: status.OK }, packet)
+                sendResponse(client, { status: status.OK, data: { transferKey: transferKey } }, packet)
               })
           } else if (operation === 'deny') {
             OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 3 } })
