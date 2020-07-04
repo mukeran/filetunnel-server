@@ -77,6 +77,7 @@ function login (packet, client) {
                 request.sendFriendRequests(client)
                 request.sendOfflineTransfers(client)
               })
+            UserModel.updateOne({ _id: user._id }, { $set: { lastAliveTime: new Date() } }).then(() => {})
           })
       } else {
         logger.debug(`${user.username} failed logged in, wrong password`)
