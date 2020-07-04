@@ -75,6 +75,7 @@ function login (packet, client) {
             }, packet)
               .then(() => { // Send all friend requests of current user to client
                 request.sendFriendRequests(client)
+                request.sendOfflineTransfers(client)
               })
           })
       } else {
@@ -189,7 +190,7 @@ function requestPublicKey (packet, client) {
       UserModel.findOne({ _id: session.userId })
         .then(user => {
           assert(user !== null)
-          if (!(userId in user.friends)) {
+          if (user.friends.indexOf(userId) === -1) {
             sendResponse(client, { status: status.ACCESS_DENIED }, packet)
             return
           }
@@ -225,6 +226,7 @@ function resumeSession (packet, client) {
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
           request.sendFriendRequests(client)
+          request.sendOfflineTransfers(client)
         })
     })
     .catch(err => {
