@@ -5,6 +5,7 @@ const { OfflineTransferModel } = require('./model/offlineTransfer')
 const config = require('./config')
 const { createWriteStream, createReadStream } = require('fs')
 const request = require('./request')
+const { callbacks } = require('./request/transmit')
 
 /**
  * Start transfer listening server
@@ -12,19 +13,19 @@ const request = require('./request')
  * @param {number} port Port to listen
  */
 function startTransferServer (host, port) {
-  logger.info(`Server starting on ${host}:${port}...`)
+  logger.info(`Transfer server starting on ${host}:${port}...`)
   const server = createServer()
   /* Event server started */
   server.on('listening', () => {
-    logger.info('Server started')
+    logger.info('Transfer server started')
   })
   /* Connection received */
   server.on('connection', (client) => {
-    logger.info(`Received connection from ${client.remoteAddress}:${client.remotePort}`)
+    logger.info(`Received transfer connection from ${client.remoteAddress}:${client.remotePort}`)
     clients.register(client.remoteAddress, client.remotePort, client)
     client.on('data', process(client))
     client.on('close', () => {
-      logger.info(`Connection from ${client.remoteAddress}:${client.remotePort} closed`)
+      logger.info(`Transfer connection from ${client.remoteAddress}:${client.remotePort} closed`)
       clients.del(client.remoteAddress, client.remotePort)
     })
     client.on('error', (err) => {
@@ -38,28 +39,29 @@ function startTransferServer (host, port) {
   server.listen(port, host)
 }
 
-const callbacks = new Map()
-
 function process (client) {
   let buffer = Buffer.alloc(0)
   return (data) => {
     logger.debug(`Transfer server receiving data ${data}`)
     buffer = Buffer.concat([buffer, data])
-    const pos = buffer.indexOf('\n')
 
     if (buffer[0] === 48 && buffer[1] === 10) {
-      const pos1 = buffer.indexOf('\n', pos + 1)
-      if (pos1 === -1) {
+      /* Transmit */
+      const pos = buffer.indexOf('\n', 2)
+      if (pos === -1) {
         logger.info('Received incomplete payload')
         return
       }
-      const id = Buffer.slice(pos + 1, pos1 + 1).toString('ascii')
+      const id = buffer.slice(2, pos).toString('ascii')
       if (callbacks.has(id)) {
-        callbacks.get(id)()
+        logger.debug(`call callback of ${id}`)
+        const cb = callbacks.get(id)
+        cb(client).catch((err) => { logger.error(err) })
+        callbacks.delete(id)
       } else {
         logger.error(`Tramsmit id no callback: ${id}`)
       }
-      buffer = buffer.slice(pos1 + 1)
+      buffer = buffer.slice(pos + 1)
     } else if (buffer[0] === 49 && buffer[1] === 10) {
       /* Offline transfer upload */
       const pos1 = buffer.indexOf('\n', 2)
@@ -126,7 +128,7 @@ function process (client) {
           })
         })
     } else {
-      buffer = buffer.slice(pos + 1)
+      buffer = buffer.slice(2)
     }
   }
 }
