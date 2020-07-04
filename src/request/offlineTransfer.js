@@ -11,17 +11,16 @@ function sendOfflineTransfers (client) {
       OfflineTransferModel.find({ $and: [{ toUserId: session.userId }, { $or: [{ status: 1 }, { status: 2 }] }] })
         .then(async offlineTransfers => {
           const requests = []
-          offlineTransfers.forEach(offlineTransfer => {
-            UserModel.findOne({ _id: offlineTransfer.fromUserId })
+          await Promise.all(offlineTransfers.map(offlineTransfer => {
+            return UserModel.findOne({ _id: offlineTransfer.fromUserId })
               .then(user => {
-                const fromUsername = user.username
                 requests.push({
                   _id: offlineTransfer._id,
                   filename: offlineTransfer.filename,
                   sha1: offlineTransfer.sha1,
                   size: offlineTransfer.size,
                   fromUserId: offlineTransfer.fromUserId,
-                  fromUsername: fromUsername,
+                  fromUsername: user.username,
                   toUserId: offlineTransfer.toUserId,
                   time: offlineTransfer.time,
                   deadline: offlineTransfer.deadline,
@@ -30,7 +29,7 @@ function sendOfflineTransfers (client) {
                   status: offlineTransfer.status
                 })
               })
-          })
+          }))
           sendRequest({
             action: 'sendOfflineTransfers',
             data: { offlineTransfers: requests }
@@ -50,17 +49,16 @@ function sendOfflineTransfersByUserId (userId) {
       OfflineTransferModel.find({ $and: [{ toUserId: userId }, { $or: [{ status: 1 }, { status: 2 }] }] })
         .then(async offlineTransfers => {
           const requests = []
-          offlineTransfers.forEach(offlineTransfer => {
-            UserModel.findOne({ _id: offlineTransfers.fromUserId })
+          await Promise.all(offlineTransfers.map(offlineTransfer => {
+            return UserModel.findOne({ _id: offlineTransfer.fromUserId })
               .then(user => {
-                const fromUsername = user.username
                 requests.push({
                   _id: offlineTransfer._id,
                   filename: offlineTransfer.filename,
                   sha1: offlineTransfer.sha1,
                   size: offlineTransfer.size,
                   fromUserId: offlineTransfer.fromUserId,
-                  fromUsername: fromUsername,
+                  fromUsername: user.username,
                   toUserId: offlineTransfer.toUserId,
                   time: offlineTransfer.time,
                   deadline: offlineTransfer.deadline,
@@ -69,7 +67,7 @@ function sendOfflineTransfersByUserId (userId) {
                   status: offlineTransfer.status
                 })
               })
-          })
+          }))
           sendRequest({
             action: 'sendOfflineTransfers',
             data: { offlineTransfers: requests }
