@@ -52,7 +52,7 @@ function queryOfflineTransfers (packet, client) {
             if (offlineTransfer.deadline.getTime() < new Date().getTime()) {
               OfflineTransferModel.deleteOne({ _id: offlineTransfer._id })
                 .then(offlineTransferRequest => {
-                  console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is out of date')
+                  console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is already out of date')
                 })
               return
             }
@@ -99,7 +99,7 @@ function answerOfflineTransfer (packet, client) {
           if (transferRequest.deadline.getTime() < new Date().getTime()) {
             OfflineTransferModel.deleteOne({ _id: transferRequest._id })
               .then(offlineTransferRequest => {
-                console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is out of date')
+                console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is already out of date')
                 sendResponse(client, { status: status.NOT_FOUND }, packet)
               })
             return
