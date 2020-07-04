@@ -26,7 +26,6 @@ function requestFriendList (packet, client) {
           for (const index in data.friends) {
             const friendId = data.friends[index]
             const friend = {
-              isNAT: false,
               isOnline: false
             }
             let isNotFound = false
@@ -46,6 +45,7 @@ function requestFriendList (packet, client) {
                 if (session !== null) {
                   friend.ip = session.ip
                   friend.port = session.transferPort
+                  friend.isNAT = session.isNAT
                   if (new Date().getTime() <= new Date(friend.lastSeen).getTime() + 3 * config.connection.ALIVE_PERIOD) {
                     friend.isOnline = true
                   }
@@ -79,18 +79,39 @@ function sendFriendRequest (packet, client) {
             sendResponse(client, { status: status.user.NO_SUCH_USER }, packet)
             return
           }
-          FriendRequestsModel.create({
-            fromUserId: fromUserSession.userId,
-            toUserId: toUser._id
-          })
-            .then(() => {
-              sendResponse(client, { status: status.OK }, packet)
-              SessionModel.findOne({ userId: toUser._id })
-                .then(session => {
-                  if (session !== null) {
-                    const toClient = clients.get(session.ip, session.controlPort)
-                    request.sendFriendRequests(toClient)
+          if (fromUserSession.userId === toUser._id.toString()) {
+            sendResponse(client, { status: status.user.CANNOT_OPERATE_SELF }, packet)
+            return
+          }
+          UserModel.findOne({ _id: fromUserSession.userId })
+            .then(fromUser => {
+              if (fromUser.friends.indexOf(toUser._id.toString()) !== -1) {
+                sendResponse(client, { status: status.user.ALREADY_FRIEND }, packet)
+                return
+              }
+              FriendRequestsModel.findOne({
+                fromUserId: fromUserSession.userId,
+                toUserId: toUser._id
+              })
+                .then(result => {
+                  if (result !== null) {
+                    sendResponse(client, { status: status.user.FRIEND_REQUEST_EXISTED }, packet)
+                    return
                   }
+                  FriendRequestsModel.create({
+                    fromUserId: fromUserSession.userId,
+                    toUserId: toUser._id
+                  })
+                    .then(() => {
+                      sendResponse(client, { status: status.OK }, packet)
+                      SessionModel.findOne({ userId: toUser._id })
+                        .then(session => {
+                          if (session !== null) {
+                            const toClient = clients.get(session.ip, session.controlPort)
+                            request.sendFriendRequests(toClient)
+                          }
+                        })
+                    })
                 })
             })
         })
@@ -109,13 +130,19 @@ function deleteFriend (packet, client) {
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
-      UserModel.findOne({ _id: session.userId })
+      const p1 = UserModel.findOne({ _id: session.userId })
         .then(data => {
           const newFriends = data.friends.filter(friend => friend !== userId)
-          UserModel.updateOne({ _id: session.userId }, { $set: { friends: newFriends } })
-            .then(() => {
-              sendResponse(client, { status: status.OK }, packet)
-            })
+          return UserModel.updateOne({ _id: session.userId }, { $set: { friends: newFriends } })
+        })
+      const p2 = UserModel.findOne({ _id: userId })
+        .then(data => {
+          const newFriends = data.friends.filter(friend => friend !== session.userId)
+          return UserModel.updateOne({ _id: userId }, { $set: { friends: newFriends } })
+        })
+      Promise.all([p1, p2])
+        .then(() => {
+          sendResponse(client, { status: status.OK }, packet)
         })
     })
     .catch(err => {

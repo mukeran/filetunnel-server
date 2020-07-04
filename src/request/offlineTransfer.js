@@ -12,6 +12,13 @@ function sendOfflineTransfers (client) {
         .then(async offlineTransfers => {
           const requests = []
           await Promise.all(offlineTransfers.map(offlineTransfer => {
+            if (offlineTransfer.deadline.getTime() < new Date().getTime()) {
+              OfflineTransferModel.deleteOne({ _id: offlineTransfer._id })
+                .then(() => {
+                  logger.debug(`Deleted expired offline transfer ${offlineTransfer._id}`)
+                })
+              return
+            }
             return UserModel.findOne({ _id: offlineTransfer.fromUserId })
               .then(user => {
                 requests.push({
@@ -50,6 +57,13 @@ function sendOfflineTransfersByUserId (userId) {
         .then(async offlineTransfers => {
           const requests = []
           await Promise.all(offlineTransfers.map(offlineTransfer => {
+            if (offlineTransfer.deadline.getTime() < new Date().getTime()) {
+              OfflineTransferModel.deleteOne({ _id: offlineTransfer._id })
+                .then(() => {
+                  logger.debug(`Deleted expired offline transfer ${offlineTransfer._id}`)
+                })
+              return
+            }
             return UserModel.findOne({ _id: offlineTransfer.fromUserId })
               .then(user => {
                 requests.push({

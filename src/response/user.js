@@ -6,6 +6,7 @@ const { logger } = require('../logger')
 const crypto = require('crypto')
 const request = require('../request')
 const { assert } = require('console')
+const net = require('net')
 
 /**
  * Register as a user
@@ -76,6 +77,7 @@ function login (packet, client) {
               .then(() => { // Send all friend requests of current user to client
                 request.sendFriendRequests(client)
                 request.sendOfflineTransfers(client)
+                testNAT(client.remoteAddress, transferPort, data._id)
               })
             UserModel.updateOne({ _id: user._id }, { $set: { lastAliveTime: new Date() } }).then(() => {})
           })
@@ -231,6 +233,7 @@ function resumeSession (packet, client) {
           sendResponse(client, { status: status.OK }, packet)
           request.sendFriendRequests(client)
           request.sendOfflineTransfers(client)
+          testNAT(client.remoteAddress, transferPort, session._id)
         })
     })
     .catch(err => {
@@ -250,12 +253,38 @@ function updateTransferPort (packet, client) {
       SessionModel.updateOne(session, { $set: { transferPort: port } })
         .then(() => {
           sendResponse(client, { status: status.OK }, packet)
+          testNAT(client.remoteAddress, port, session._id)
         })
     })
     .catch(err => {
       logger.error(err)
       sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
     })
+}
+
+function testNAT (host, port, _id) {
+  if (typeof port === 'undefined' || port === null || port === 0) return
+  const setNAT = (status) => {
+    SessionModel.updateOne({ _id }, { $set: { isNAT: status } })
+      .then(() => {
+        logger.debug(`Updated session ${_id}'s isNAT to ${status}`)
+      })
+  }
+  const socket = net.createConnection(port, host)
+  const timeout = setTimeout(() => {
+    socket.destroy()
+    setNAT(true)
+  }, 5000)
+  socket.on('error', () => {
+    clearTimeout(timeout)
+    socket.destroy()
+    setNAT(true)
+  })
+  socket.on('connect', () => {
+    clearTimeout(timeout)
+    socket.end()
+    setNAT(false)
+  })
 }
 
 module.exports = {

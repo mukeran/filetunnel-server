@@ -51,8 +51,8 @@ function queryOfflineTransfers (packet, client) {
           await Promise.all(offlineTransfers.map(offlineTransfer => {
             if (offlineTransfer.deadline.getTime() < new Date().getTime()) {
               OfflineTransferModel.deleteOne({ _id: offlineTransfer._id })
-                .then(offlineTransferRequest => {
-                  console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is already out of date')
+                .then(() => {
+                  logger.debug(`Deleted expired offline transfer ${offlineTransfer._id}`)
                 })
               return
             }
@@ -97,10 +97,10 @@ function answerOfflineTransfer (packet, client) {
             return
           }
           if (transferRequest.deadline.getTime() < new Date().getTime()) {
+            sendResponse(client, { status: status.NOT_FOUND }, packet)
             OfflineTransferModel.deleteOne({ _id: transferRequest._id })
-              .then(offlineTransferRequest => {
-                console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is already out of date')
-                sendResponse(client, { status: status.NOT_FOUND }, packet)
+              .then(() => {
+                logger.debug(`Deleted expired offline transfer ${transferRequest._id}`)
               })
             return
           }
