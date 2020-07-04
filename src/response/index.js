@@ -8,6 +8,7 @@ const actions = {
   ...require('./alive'),
   ...require('./user'),
   ...require('./friend'),
+  ...require('./transmit'),
   ...require('./offlineTransfer')
 }
 

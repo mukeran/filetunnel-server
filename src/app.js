@@ -1,7 +1,7 @@
 /**
  * App entry
  */
-const { startServer } = require('./server')
+const { startServer, startDataServer } = require('./server')
 const config = require('./config')
 const db = require('./database')
 const { logger } = require('./logger')
