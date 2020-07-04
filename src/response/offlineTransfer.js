@@ -3,25 +3,30 @@ const { SessionModel } = require('../model/session')
 const crypto = require('crypto')
 const { sendResponse } = require('../connection/payload')
 const status = require('../status')
-const logger = require('../logger')
+const { logger } = require('../logger')
 
 function requestOfflineTransfer (packet, client) {
   const { userId, filename, size, sha1, deadline, encryptedKey, signature } = packet.data
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.ACCESS_DENIED }, packet)
+        return
+      }
+      const transferKey = crypto.randomBytes(16).toString('hex')
       OfflineTransferModel.create({
         fromUserId: session.userId,
         toUserId: userId,
+        transferKey,
         filename: filename,
         size: size,
         sha1: sha1,
         status: 0,
-        deadline: deadline,
+        deadline: new Date(deadline),
         encryptedKey: encryptedKey,
         signature: signature
       })
         .then(data => {
-          const transferKey = crypto.randomBytes(16).toString('hex')
           sendResponse(client, { status: status.OK, data: { _id: data._id, transferKey: transferKey } }, packet)
         })
         .catch(err => {
@@ -39,25 +44,25 @@ function queryOfflineTransfers (packet, client) {
         return
       }
       OfflineTransferModel.find({ fromUserId: fromUserSession.userId })
-        .then(async offlineTransfers => {
+        .then(offlineTransfers => {
+          if (offlineTransfers === null) offlineTransfers = []
           const record = []
-          for (const index in offlineTransfers) {
-            await OfflineTransferModel.findOne({ _id: offlineTransfers[index]._id })
-              .then(TransferRecord => {
-                record.push({
-                  filename: TransferRecord.filename,
-                  sha1: TransferRecord.sha1,
-                  toUserId: TransferRecord.toUserId,
-                  status: TransferRecord.status,
-                  time: TransferRecord.time.toISOString(),
-                  deadline: TransferRecord.deadline.toISOString()
-                })
-              })
-          }
+          offlineTransfers.forEach((offlineTransfer) => {
+            logger.debug(offlineTransfer)
+            record.push({
+              _id: offlineTransfer._id,
+              filename: offlineTransfer.filename,
+              sha1: offlineTransfer.sha1,
+              toUserId: offlineTransfer.toUserId,
+              status: offlineTransfer.status,
+              time: offlineTransfer.time.toISOString(),
+              deadline: offlineTransfer.deadline.toISOString()
+            })
+          })
           sendResponse(client, {
             status: status.OK,
-            data: { friendRequests: record }
-          }, client)
+            data: { offlineTransfers: record }
+          }, packet)
         })
         .catch(err => {
           logger.debug('Err in query：' + err)
@@ -84,10 +89,6 @@ function answerOfflineTransfer (packet, client) {
             sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
             return
           }
-          if (transferRequest.toUserId !== session.userId) {
-            sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
-            return
-          }
           if (operation === 'accept') {
             const transferKey = crypto.randomBytes(16).toString('hex')
             OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 2, transferKey: transferKey } })
@@ -101,6 +102,8 @@ function answerOfflineTransfer (packet, client) {
                 /* File operation */
                 sendResponse(client, { status: status.OK }, packet)
               })
+          } else if (operation === 'invalid_sign') {
+          } else {
           }
         })
     })

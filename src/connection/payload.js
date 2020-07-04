@@ -39,6 +39,7 @@ function sendRequest (packet, client, timeout = config.connection.RESPONSE_TIMEO
   return new Promise((resolve, reject) => {
     /* Register resolve callback and add sq to packet */
     const sq = callback.register(resolve)
+    logger.debug(sq)
     packet = { ...packet, sq }
     const payload = createPayload(packet)
     logger.debug(`Sending payload ${payload}`)

@@ -7,29 +7,27 @@ function sendOfflineTransfers (client) {
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
       if (session === null) return
-      OfflineTransferModel.find({ toUserId: session.userId })
-        .then(async offlineTransferRequests => {
+      OfflineTransferModel.find({ $and: [{ toUserId: session.userId }, { $or: [{ status: 1 }, { status: 2 }] }] })
+        .then(async offlineTransfers => {
           const requests = []
-          for (const index in offlineTransferRequests) {
-            await OfflineTransferModel.findOne({ _id: offlineTransferRequests[index]._id })
-              .then(TransferRecord => {
-                requests.push({
-                  _id: TransferRecord._id,
-                  filename: TransferRecord.filename,
-                  sha1: TransferRecord.sha1,
-                  size: TransferRecord.size,
-                  fromUserId: TransferRecord.fromUserId,
-                  toUserId: TransferRecord.toUserId,
-                  time: TransferRecord.time,
-                  deadline: TransferRecord.deadline,
-                  signature: TransferRecord.signature,
-                  encryptedKey: TransferRecord.encryptedKey
-                })
-              })
-          }
+          offlineTransfers.forEach(offlineTransfer => {
+            requests.push({
+              _id: offlineTransfer._id,
+              filename: offlineTransfer.filename,
+              sha1: offlineTransfer.sha1,
+              size: offlineTransfer.size,
+              fromUserId: offlineTransfer.fromUserId,
+              toUserId: offlineTransfer.toUserId,
+              time: offlineTransfer.time,
+              deadline: offlineTransfer.deadline,
+              signature: offlineTransfer.signature,
+              encryptedKey: offlineTransfer.encryptedKey,
+              status: offlineTransfer.status
+            })
+          })
           sendRequest({
             action: 'sendOfflineTransfers',
-            data: { offlineTransfer: requests }
+            data: { offlineTransfers: requests }
           }, client)
         })
     })
@@ -39,33 +37,31 @@ function sendOfflineTransfers (client) {
 }
 
 function sendOfflineTransfersByUserId (userId) {
-  OfflineTransferModel.find({ toUserId: userId })
-    .then(async offlineTransferRequests => {
-      const requests = []
-      for (const index in offlineTransferRequests) {
-        await OfflineTransferModel.findOne({ _id: offlineTransferRequests[index]._id })
-          .then(TransferRecord => {
+  SessionModel.findOne({ userId: userId })
+    .then((session) => {
+      if (session === null) return
+      const client = get(session.host, session.controlPort)
+      OfflineTransferModel.find({ $and: [{ toUserId: userId }, { $or: [{ status: 1 }, { status: 2 }] }] })
+        .then(async offlineTransfers => {
+          const requests = []
+          offlineTransfers.forEach(offlineTransfer => {
             requests.push({
-              _id: TransferRecord._id,
-              filename: TransferRecord.filename,
-              sha1: TransferRecord.sha1,
-              size: TransferRecord.size,
-              fromUserId: TransferRecord.fromUserId,
-              toUserId: TransferRecord.toUserId,
-              time: TransferRecord.time,
-              deadline: TransferRecord.deadline,
-              signature: TransferRecord.signature,
-              encryptedKey: TransferRecord.encryptedKey
+              _id: offlineTransfer._id,
+              filename: offlineTransfer.filename,
+              sha1: offlineTransfer.sha1,
+              size: offlineTransfer.size,
+              fromUserId: offlineTransfer.fromUserId,
+              toUserId: offlineTransfer.toUserId,
+              time: offlineTransfer.time,
+              deadline: offlineTransfer.deadline,
+              signature: offlineTransfer.signature,
+              encryptedKey: offlineTransfer.encryptedKey,
+              status: offlineTransfer.status
             })
           })
-      }
-      SessionModel.findOne({ userId: userId })
-        .then((session) => {
-          if (session === null) return
-          const client = get(session.host, session.controlPort)
           sendRequest({
-            action: 'sendOfflineTransfersByUserId',
-            data: { offlineTransfer: requests }
+            action: 'sendOfflineTransfers',
+            data: { offlineTransfers: requests }
           }, client)
         })
     })

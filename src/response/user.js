@@ -190,7 +190,7 @@ function requestPublicKey (packet, client) {
       UserModel.findOne({ _id: session.userId })
         .then(user => {
           assert(user !== null)
-          if (!(userId in user.friends)) {
+          if (user.friends.indexOf(userId) === -1) {
             sendResponse(client, { status: status.ACCESS_DENIED }, packet)
             return
           }
