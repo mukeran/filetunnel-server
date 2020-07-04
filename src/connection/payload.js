@@ -8,11 +8,11 @@ const callback = require('./callback')
 /**
  * Package packet into payload
  * @param {Object} packet Packet to send
- * @returns {string} Packaged payload
+ * @returns {Buffer} Packaged payload
  */
 function createPayload (packet) {
-  const data = JSON.stringify(packet)
-  return data.length + '\n' + data
+  const data = Buffer.from(JSON.stringify(packet))
+  return Buffer.concat([Buffer.from(data.length.toString()), Buffer.from('\n'), data]) // Add data.length info
 }
 
 /**
@@ -37,6 +37,10 @@ function sendResponse (client, packet, reqPacket) {
  */
 function sendRequest (packet, client, timeout = config.connection.RESPONSE_TIMEOUT) {
   return new Promise((resolve, reject) => {
+    if (typeof client === 'undefined') {
+      logger.error('Send request to undefined client')
+      return
+    }
     /* Register resolve callback and add sq to packet */
     const sq = callback.register(resolve)
     packet = { ...packet, sq }

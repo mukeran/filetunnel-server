@@ -45,7 +45,7 @@ function sendOfflineTransfersByUserId (userId) {
   SessionModel.findOne({ userId: userId })
     .then((session) => {
       if (session === null) return
-      const client = get(session.host, session.controlPort)
+      const client = get(session.ip, session.controlPort)
       OfflineTransferModel.find({ $and: [{ toUserId: userId }, { $or: [{ status: 1 }, { status: 2 }] }] })
         .then(async offlineTransfers => {
           const requests = []

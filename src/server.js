@@ -49,6 +49,7 @@ function processData (client) {
       try {
         packet = JSON.parse(tmp)
       } catch (e) {
+        logger.debug(tmp)
         logger.error('Invalid JSON format')
         break
       }
