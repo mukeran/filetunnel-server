@@ -49,6 +49,13 @@ function queryOfflineTransfers (packet, client) {
           if (offlineTransfers === null) offlineTransfers = []
           const record = []
           await Promise.all(offlineTransfers.map(offlineTransfer => {
+            if (offlineTransfer.deadline.getTime() < new Date().getTime()) {
+              OfflineTransferModel.deleteOne({ _id: offlineTransfer._id })
+                .then(offlineTransferRequest => {
+                  console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is out of date')
+                })
+              return
+            }
             return UserModel.findOne({ _id: offlineTransfer.toUserId })
               .then(user => {
                 record.push({
@@ -87,6 +94,14 @@ function answerOfflineTransfer (packet, client) {
         .then(transferRequest => {
           if (transferRequest === null) {
             sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+            return
+          }
+          if (transferRequest.deadline.getTime() < new Date().getTime()) {
+            OfflineTransferModel.deleteOne({ _id: transferRequest._id })
+              .then(offlineTransferRequest => {
+                console.log('Offline transfer request: ' + offlineTransferRequest._id + ' is out of date')
+                sendResponse(client, { status: status.NOT_FOUND }, packet)
+              })
             return
           }
           if (transferRequest.toUserId !== session.userId) {
