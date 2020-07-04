@@ -1,5 +1,6 @@
 const { OfflineTransferModel } = require('../model/offlineTransfer')
 const { SessionModel } = require('../model/session')
+const { UserModel } = require('../model/user')
 const crypto = require('crypto')
 const { sendResponse } = require('../connection/payload')
 const status = require('../status')
@@ -44,21 +45,24 @@ function queryOfflineTransfers (packet, client) {
         return
       }
       OfflineTransferModel.find({ fromUserId: fromUserSession.userId })
-        .then(offlineTransfers => {
+        .then(async offlineTransfers => {
           if (offlineTransfers === null) offlineTransfers = []
           const record = []
-          offlineTransfers.forEach((offlineTransfer) => {
-            logger.debug(offlineTransfer)
-            record.push({
-              _id: offlineTransfer._id,
-              filename: offlineTransfer.filename,
-              sha1: offlineTransfer.sha1,
-              toUserId: offlineTransfer.toUserId,
-              status: offlineTransfer.status,
-              time: offlineTransfer.time.toISOString(),
-              deadline: offlineTransfer.deadline.toISOString()
-            })
-          })
+          await Promise.all(offlineTransfers.map(offlineTransfer => {
+            return UserModel.findOne({ _id: offlineTransfer.toUserId })
+              .then(user => {
+                record.push({
+                  _id: offlineTransfer._id,
+                  filename: offlineTransfer.filename,
+                  sha1: offlineTransfer.sha1,
+                  toUserId: offlineTransfer.toUserId,
+                  toUsername: user.username,
+                  status: offlineTransfer.status,
+                  time: offlineTransfer.time.toISOString(),
+                  deadline: offlineTransfer.deadline.toISOString()
+                })
+              })
+          }))
           sendResponse(client, {
             status: status.OK,
             data: { offlineTransfers: record }

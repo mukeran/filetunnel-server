@@ -21,7 +21,7 @@ const OfflineTransferSchema = new mongoose.Schema({
  * 0: UPLOADING,
  * 1: PENDING,
  * 2: ACCEPTED,
- * 3: DENIED,
+ * 3: REJECTED,
  * 4: INVALID_SIGN
  */
 
