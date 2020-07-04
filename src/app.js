@@ -5,6 +5,12 @@ const { startServer, startDataServer } = require('./server')
 const config = require('./config')
 const db = require('./database')
 const { logger } = require('./logger')
+const fs = require('fs')
+const { startTransferServer } = require('./transferServer')
+
+if (!fs.existsSync(config.offlineDir)) {
+  fs.mkdirSync(config.offlineDir)
+}
 
 logger.info('Waiting for database connection...')
 new Promise((resolve, reject) => {
@@ -13,7 +19,7 @@ new Promise((resolve, reject) => {
 })
   .then(() => {
     startServer(config.listen.HOST, config.listen.PORT)
-    startDataServer(config.listen.HOST, config.listen.DATA_PORT)
+    startTransferServer(config.listen.HOST, config.listen.TRANSFER_PORT)
   })
   .catch(() => {
     logger.error('Failed to connect to database')
