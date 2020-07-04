@@ -90,20 +90,50 @@ function answerOfflineTransfer (packet, client) {
             return
           }
           if (operation === 'accept') {
-            const transferKey = crypto.randomBytes(16).toString('hex')
-            OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 2, transferKey: transferKey } })
-              .then(() => {
-                /* File operation */
-                sendResponse(client, { status: status.OK, data: { transferKey: transferKey } }, packet)
+            OfflineTransferModel.findOne({ _id: transferRequest._id })
+              .then(offlineTransfer => {
+                if (offlineTransfer.status === 1 || offlineTransfer.status === 2) {
+                  const transferKey = crypto.randomBytes(16).toString('hex')
+                  OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 2, transferKey: transferKey } })
+                    .then(() => {
+                      /* File operation */
+                      sendResponse(client, { status: status.OK, data: { transferKey: transferKey } }, packet)
+                    })
+                } else {
+                  console.log('Can not accept it')
+                  sendResponse(client, { status: status.transfer.DENIED }, packet)
+                }
               })
           } else if (operation === 'deny') {
-            OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 3 } })
-              .then(() => {
-                /* File operation */
-                sendResponse(client, { status: status.OK }, packet)
+            OfflineTransferModel.findOne({ _id: transferRequest._id })
+              .then(offlineTransfer => {
+                if (offlineTransfer.status === 1) {
+                  OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 3 } })
+                    .then(() => {
+                      /* File operation */
+                      sendResponse(client, { status: status.OK }, packet)
+                    })
+                } else {
+                  console.log('Can not deny it')
+                  sendResponse(client, { status: status.transfer.DENIED }, packet)
+                }
               })
           } else if (operation === 'invalid_sign') {
+            OfflineTransferModel.findOne({ _id: transferRequest._id })
+              .then(offlineTransfer => {
+                if (offlineTransfer.status === 1) {
+                  OfflineTransferModel.updateOne({ _id: transferRequest._id }, { $set: { status: 4 } })
+                    .then(() => {
+                      /* File operation */
+                      sendResponse(client, { status: status.OK }, packet)
+                    })
+                } else {
+                  console.log('Invalid_sign')
+                  sendResponse(client, { status: status.transfer.FAILED }, packet)
+                }
+              })
           } else {
+            logger.debug('Unknown Error')
           }
         })
     })
