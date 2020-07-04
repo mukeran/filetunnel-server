@@ -7,7 +7,8 @@ const { logger } = require('../logger')
 const actions = {
   ...require('./alive'),
   ...require('./user'),
-  ...require('./friend')
+  ...require('./friend'),
+  ...require('./transmit')
 }
 
 /**

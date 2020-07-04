@@ -1,7 +1,7 @@
 /**
  * App entry
  */
-const { startServer } = require('./server')
+const { startServer, startDataServer } = require('./server')
 const config = require('./config')
 const db = require('./database')
 const { logger } = require('./logger')
@@ -13,6 +13,7 @@ new Promise((resolve, reject) => {
 })
   .then(() => {
     startServer(config.listen.HOST, config.listen.PORT)
+    startDataServer(config.listen.HOST, config.listen.DATA_PORT)
   })
   .catch(() => {
     logger.error('Failed to connect to database')

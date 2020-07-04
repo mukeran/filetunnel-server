@@ -4,7 +4,8 @@
 module.exports = {
   listen: {
     HOST: '::',
-    PORT: 10088
+    PORT: 10088,
+    DATA_PORT: 10089
   },
   connection: {
     MAX_SEQUENCE_NUMBER: 65536,

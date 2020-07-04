@@ -183,19 +183,22 @@ function requestPublicKey (packet, client) {
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
       if (session === null) {
+        logger.debug('Request public key no session')
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
       UserModel.findOne({ _id: session.userId })
         .then(user => {
           assert(user !== null)
-          if (!(userId in user.friends)) {
+          if (user.friends.indexOf(userId) === -1) {
+            logger.debug(`Request ${userId} public key not friend: ${user}`)
             sendResponse(client, { status: status.ACCESS_DENIED }, packet)
             return
           }
           UserModel.findOne({ _id: userId })
             .then(user => {
               if (user === null) {
+                logger.debug('Request public key no user')
                 sendResponse(client, { status: status.user.NO_SUCH_USER }, packet)
                 return
               }
@@ -233,6 +236,25 @@ function resumeSession (packet, client) {
     })
 }
 
+function updateTransferPort (packet, client) {
+  const { port } = packet.data
+  SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
+    .then(session => {
+      if (session === null) {
+        sendResponse(client, { status: status.session.NO_SUCH_SESSION }, packet)
+        return
+      }
+      SessionModel.updateOne(session, { $set: { transferPort: port } })
+        .then(() => {
+          sendResponse(client, { status: status.OK }, packet)
+        })
+    })
+    .catch(err => {
+      logger.error(err)
+      sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
+    })
+}
+
 module.exports = {
   register,
   login,
@@ -240,5 +262,6 @@ module.exports = {
   changePassword,
   changePublicKey,
   requestPublicKey,
-  resumeSession
+  resumeSession,
+  updateTransferPort
 }
