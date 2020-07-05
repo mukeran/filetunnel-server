@@ -2,18 +2,18 @@ const mongoose = require('mongoose')
 const db = require('../database')
 
 const OfflineTransferSchema = new mongoose.Schema({
-  fromUserId: { type: String },
-  toUserId: { type: String },
-  status: { type: Number },
-  transferKey: { type: String },
-  filename: { type: String },
-  size: { type: Number },
-  sha1: { type: String },
-  encryptedKey: { type: String },
-  path: { type: String },
-  time: { type: Date, default: Date.now },
-  deadline: { type: Date },
-  signature: { type: String }
+  fromUserId: { type: String }, // Offline transfer requester user id
+  toUserId: { type: String }, // Offline transfer receiver user id
+  status: { type: Number }, // Offline transfer status
+  transferKey: { type: String }, // Transfer key
+  filename: { type: String }, // File name
+  size: { type: Number }, // File size
+  sha1: { type: String }, // File sha1 check code
+  encryptedKey: { type: String }, // Ecvrypted key
+  path: { type: String }, // File path
+  time: { type: Date, default: Date.now }, // Request time
+  deadline: { type: Date }, // Dead line
+  signature: { type: String } // File signature
 })
 
 /**

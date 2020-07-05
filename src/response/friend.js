@@ -9,13 +9,21 @@ const clients = require('../connection/clients')
 const request = require('../request')
 const config = require('../config')
 
+/**
+ * Send friend requests to client
+ * @param {Object} packet Packet received
+ * @param {Socket} client Current client socket
+ */
 function requestFriendList (packet, client) {
+  /* Get user session */
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
+      /* Make sure the user is online */
       if (session === null) {
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
+      /* Find usrrent user's friends */
       UserModel.findOne({ _id: session.userId })
         .then(async (data) => {
           if (data === null) {
@@ -23,6 +31,7 @@ function requestFriendList (packet, client) {
             return
           }
           const friends = []
+          /* Get friends information */
           for (const index in data.friends) {
             const friendId = data.friends[index]
             const friend = {
@@ -40,6 +49,7 @@ function requestFriendList (packet, client) {
                 friend.lastSeen = user.lastAliveTime.toISOString()
               })
             if (isNotFound) continue
+            /* Get friends session information */
             await SessionModel.findOne({ userId: friendId })
               .then(session => {
                 if (session !== null) {
@@ -65,20 +75,30 @@ function requestFriendList (packet, client) {
     })
 }
 
+/**
+ * Process friend request from client
+ * @param {Object} packet Packet received
+ * @param {Socket} client Current client socket
+ */
 function sendFriendRequest (packet, client) {
   const { username } = packet.data
+  /* Get user session */
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(fromUserSession => {
+      /* Make sure the user is online */
       if (fromUserSession === null) {
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
+      /* Find receiver */
       UserModel.findOne({ username: username })
         .then(toUser => {
+          /* Check if the user exists */
           if (toUser === null) {
             sendResponse(client, { status: status.user.NO_SUCH_USER }, packet)
             return
           }
+          /* Check if the user is current user */
           if (fromUserSession.userId === toUser._id.toString()) {
             sendResponse(client, { status: status.user.CANNOT_OPERATE_SELF }, packet)
             return
@@ -94,6 +114,7 @@ function sendFriendRequest (packet, client) {
                 toUserId: toUser._id
               })
                 .then(result => {
+                  /* Check if it has been requested */
                   if (result !== null) {
                     sendResponse(client, { status: status.user.FRIEND_REQUEST_EXISTED }, packet)
                     return
@@ -106,6 +127,7 @@ function sendFriendRequest (packet, client) {
                       sendResponse(client, { status: status.OK }, packet)
                       SessionModel.findOne({ userId: toUser._id })
                         .then(session => {
+                          /* Send request to receiver when user is online */
                           if (session !== null) {
                             const toClient = clients.get(session.ip, session.controlPort)
                             request.sendFriendRequests(toClient)
@@ -122,14 +144,22 @@ function sendFriendRequest (packet, client) {
     })
 }
 
+/**
+ * Delete friend
+ * @param {Object} packet Packet received
+ * @param {Socket} client Current client socket
+ */
 function deleteFriend (packet, client) {
   const { userId } = packet.data
+  /* Get user session */
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
+      /* Make sure the user is online */
       if (session === null) {
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
+      /* Delete friends in both directions */
       const p1 = UserModel.findOne({ _id: session.userId })
         .then(data => {
           const newFriends = data.friends.filter(friend => friend !== userId)
@@ -151,24 +181,34 @@ function deleteFriend (packet, client) {
     })
 }
 
+/**
+ * Answer friend request
+ * @param {Object} packet Packet received
+ * @param {Socket} client Current client socket
+ */
 function answerFriendRequest (packet, client) {
   const { _id, operation } = packet.data
+  /* Get user session */
   SessionModel.getByIpPort(client.remoteAddress, client.remotePort)
     .then(session => {
+      /* Make sure the user is online */
       if (session === null) {
         sendResponse(client, { status: status.ACCESS_DENIED }, packet)
         return
       }
       FriendRequestsModel.findOne({ _id })
         .then(friendRequest => {
+          /* Check if the current user is online */
           if (friendRequest === null) {
             sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
             return
           }
+          /* Check the receiver is current user */
           if (friendRequest.toUserId !== session.userId) {
             sendResponse(client, { status: status.UNKNOWN_ERROR }, packet)
             return
           }
+          /* Add friend in both direction */
           if (operation === 'accept') {
             UserModel.findOne({ _id: friendRequest.toUserId })
               .then(data => {
@@ -190,6 +230,7 @@ function answerFriendRequest (packet, client) {
                 }
               })
           }
+          /* Delete friend request */
           FriendRequestsModel.deleteOne(friendRequest)
             .then(() => {
               logger.debug(`Successfully deleted friendRequest ${_id}`)
