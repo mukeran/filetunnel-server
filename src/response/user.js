@@ -262,6 +262,12 @@ function updateTransferPort (packet, client) {
     })
 }
 
+/**
+ * Test NAT for user
+ * @param {String} host Host to test
+ * @param {Number} port Port to test
+ * @param {ObjectID} _id User session's _id
+ */
 function testNAT (host, port, _id) {
   if (typeof port === 'undefined' || port === null || port === 0) return
   const setNAT = (status) => {
