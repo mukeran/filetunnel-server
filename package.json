@@ -11,7 +11,7 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "log4js": "^6.3.0",
+    "log4js": "^6.4.0",
     "mongodb": "^3.5.9",
     "mongoose": "^5.9.20"
   },
